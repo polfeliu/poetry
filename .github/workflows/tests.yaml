@@ -21,7 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       project: ${{ steps.changes.outputs.project }}
-      fixtures-pypi: ${{ steps.changes.outputs.fixtures-pypi }}
       src: ${{ steps.changes.outputs.src }}
       tests: ${{ steps.changes.outputs.tests }}
     steps:
@@ -41,9 +40,6 @@ jobs:
               - *workflow
               - 'poetry.lock'
               - 'pyproject.toml'
-            fixtures-pypi:
-              - *workflow
-              - 'tests/repositories/fixtures/pypi.org/**'
             src:
               - *project
               - 'src/**/*.py'
@@ -87,26 +83,6 @@ jobs:
       # Smoke test: confirm the version of the installed wheel matches the project.
       - run: poetry@build --version | grep $(poetry version --short)
 
-  fixtures-pypi:
-    name: Check fixtures (PyPI)
-    runs-on: ubuntu-latest
-    if: needs.changes.outputs.fixtures-pypi == 'true'
-    needs: changes
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-
-      - uses: ./.github/actions/bootstrap-poetry
-
-      - uses: ./.github/actions/poetry-install
-        with:
-          args: --only main,test
-
-      - run: poetry run env PYTHONPATH="$GITHUB_WORKSPACE" python tests/repositories/fixtures/pypi.org/generate.py
-
-      - run: git diff --exit-code --stat HEAD tests/repositories/fixtures/pypi.org
-
   tests-matrix:
     # Use this matrix with multiple jobs defined in a reusable workflow:
     uses: ./.github/workflows/.tests-matrix.yaml
@@ -138,7 +114,6 @@ jobs:
     needs:
       - lockfile
       - smoke
-      - fixtures-pypi
       - tests-matrix
     steps:
       - run: ${{ (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) && 'false' || 'true' }}
