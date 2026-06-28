@@ -17,17 +17,16 @@ def try_hardlink(src: Path, dst: Path) -> bool:
     Returns True if hardlink was successfully created, False otherwise.
     """
     try:
+        dst.parent.mkdir(parents=True, exist_ok=True)
+
         # Check if src and dst are on the same filesystem
         if src.stat().st_dev != dst.parent.stat().st_dev:
             return False
 
-        # Ensure parent directory exists
-        dst.parent.mkdir(parents=True, exist_ok=True)
-
         # Create hardlink
         dst.hardlink_to(src)
         return True
-    except (OSError, NotImplementedError, FileNotFoundError):
+    except OSError:
         return False
 
 

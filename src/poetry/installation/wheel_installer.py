@@ -135,9 +135,15 @@ class WheelDestination(SchemeDictionaryDestination):
 
 
 class WheelInstaller:
-    def __init__(self, env: Env, link_mode: str = "copy") -> None:
+    def __init__(
+        self,
+        env: Env,
+        link_mode: str = "copy",
+        store_base_path: Path | None = None,
+    ) -> None:
         self._env = env
         self._link_mode = link_mode
+        self._store_base_path = store_base_path
 
         script_kind: LauncherKind
         if not WINDOWS:
@@ -162,7 +168,12 @@ class WheelInstaller:
         # Extract wheel to unpacked store if using link mode and hash is known
         store_path = None
         if self._link_mode != "copy" and content_hash is not None:
-            store = UnpackedWheelStore(self._env.path / ".." / ".." / "cache")
+            cache_base = (
+                self._store_base_path
+                if self._store_base_path is not None
+                else self._env.path / ".." / ".." / "cache"
+            )
+            store = UnpackedWheelStore(cache_base)
             store_path = store.extract_wheel(wheel, content_hash)
 
         with WheelFile.open(wheel) as source:
