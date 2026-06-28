@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from typing import ClassVar
 
 from cleo.helpers import option
 
@@ -17,7 +18,7 @@ class CachePruneCommand(Command):
     name = "cache prune"
     description = "Prune unreferenced entries from the unpacked wheel store."
 
-    options: list[Option] = [
+    options: ClassVar[list[Option]] = [
         option(
             "dry-run",
             description="Show what would be pruned without actually deleting anything.",

@@ -25,7 +25,7 @@ def try_hardlink(src: Path, dst: Path) -> bool:
         dst.parent.mkdir(parents=True, exist_ok=True)
 
         # Create hardlink
-        src.link_to(dst)
+        dst.hardlink_to(src)
         return True
     except (OSError, NotImplementedError, FileNotFoundError):
         return False
@@ -41,11 +41,11 @@ def try_reflink(src: Path, dst: Path) -> bool:
         # Ensure parent directory exists
         dst.parent.mkdir(parents=True, exist_ok=True)
 
-        # Try platform-specific reflink methods
-        if hasattr(os, 'reflink'):
-            # Linux (btrfs, xfs, ocfs2, etc.)
+        # Try platform-specific reflink methods via fcntl
+        _reflink = getattr(os, 'reflink', None)
+        if _reflink is not None:
             with src.open('rb') as fsrc, dst.open('wb') as fdst:
-                os.reflink(fsrc.fileno(), fdst.fileno())
+                _reflink(fsrc.fileno(), fdst.fileno())
             return True
 
         # Try shutil.copyfile with follow_symlinks=False for potential reflink

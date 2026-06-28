@@ -45,7 +45,7 @@ class UnpackedWheelStore:
         wheel_key = {
             "name": wheel.name,
             "version": wheel.version,
-            "tags": sorted(wheel.tags),
+            "tags": sorted(str(tag) for tag in wheel.tags),
         }
         key_json = json.dumps(wheel_key, sort_keys=True, separators=(",", ":"))
         key_hash = hashlib.sha256(key_json.encode("utf-8")).hexdigest()

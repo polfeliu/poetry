@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import platform
@@ -38,7 +39,7 @@ class WheelDestination(SchemeDictionaryDestination):
         self,
         scheme_dict: dict[str, str],
         interpreter: str,
-        script_kind: str,
+        script_kind: LauncherKind,
         bytecode_optimization_levels: Collection[int],
         link_mode: str = "copy",
         store_path: Path | None = None,
@@ -114,8 +115,12 @@ class WheelDestination(SchemeDictionaryDestination):
                 )
 
                 # Calculate hash and size for the record
+                hash_ = hashlib.sha256()
                 with target_path.open("rb") as f:
-                    hash_, size = copyfileobj_with_hashing(f, None, self.hash_algorithm)
+                    while chunk := f.read(65536):
+                        hash_.update(chunk)
+                hash_ = hash_.hexdigest()
+                size = target_path.stat().st_size
 
                 return RecordEntry(path, Hash(self.hash_algorithm, hash_), size)
 
