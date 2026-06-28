@@ -612,7 +612,8 @@ class Executor:
                 assert isinstance(operation, Update)
                 self._remove(operation.initial_package)
 
-            self._wheel_installer.install(archive)
+            content_hash = self._hashes.get(package.name)
+            self._wheel_installer.install(archive, content_hash=content_hash)
         finally:
             if cleanup_archive:
                 archive.unlink()

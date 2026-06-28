@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import shutil
 import zipfile
 from pathlib import Path
 from typing import TYPE_CHECKING
-
-from poetry.utils.wheel import Wheel
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -17,8 +14,8 @@ class UnpackedWheelStore:
     """
     Store for unpacked wheel files that can be hardlinked into virtual environments.
 
-    Wheels are stored in a content-addressed directory structure based on their
-    name, version, and tags to enable safe sharing across multiple environments.
+    Wheels are stored in a content-addressed directory structure based on the
+    content hash from the lock file to ensure cache validity.
     """
 
     def __init__(self, cache_dir: Path) -> None:
@@ -31,40 +28,31 @@ class UnpackedWheelStore:
         self.cache_dir = cache_dir / "unpacked"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    def get_store_path(self, wheel: Wheel) -> Path:
+    def get_store_path(self, content_hash: str) -> Path:
         """
-        Get the store path for a wheel.
+        Get the store path for a wheel identified by its content hash.
 
         Args:
-            wheel: Wheel object
+            content_hash: Content hash from the lock file (e.g. "sha256:abc...")
 
         Returns:
             Path to the unpacked wheel directory in the store
         """
-        # Create a content-addressed key
-        wheel_key = {
-            "name": wheel.name,
-            "version": wheel.version,
-            "tags": sorted(str(tag) for tag in wheel.tags),
-        }
-        key_json = json.dumps(wheel_key, sort_keys=True, separators=(",", ":"))
-        key_hash = hashlib.sha256(key_json.encode("utf-8")).hexdigest()
-
-        # Use first 16 characters of hash for directory name
+        key_hash = hashlib.sha256(content_hash.encode("utf-8")).hexdigest()
         return self.cache_dir / key_hash[:16]
 
-    def extract_wheel(self, wheel_path: Path) -> Path:
+    def extract_wheel(self, wheel_path: Path, content_hash: str) -> Path:
         """
         Extract a wheel file to the store.
 
         Args:
             wheel_path: Path to the wheel file
+            content_hash: Content hash from the lock file
 
         Returns:
             Path to the extracted wheel directory
         """
-        wheel = Wheel(wheel_path.name)
-        store_path = self.get_store_path(wheel)
+        store_path = self.get_store_path(content_hash)
 
         # Check if already extracted
         if store_path.exists():

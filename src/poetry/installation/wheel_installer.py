@@ -155,17 +155,15 @@ class WheelInstaller:
     def enable_bytecode_compilation(self, enable: bool = True) -> None:
         self._bytecode_optimization_levels = (-1,) if enable else ()
 
-    def install(self, wheel: Path) -> None:
+    def install(self, wheel: Path, content_hash: str | None = None) -> None:
         # Import here to avoid circular imports
         from poetry.installation.unpacked_wheel_store import UnpackedWheelStore
-        from poetry.utils.wheel import Wheel
 
-        # Extract wheel to unpacked store if using link mode
+        # Extract wheel to unpacked store if using link mode and hash is known
         store_path = None
-        if self._link_mode != "copy":
-            wheel_obj = Wheel(wheel.name)
+        if self._link_mode != "copy" and content_hash is not None:
             store = UnpackedWheelStore(self._env.path / ".." / ".." / "cache")
-            store_path = store.extract_wheel(wheel)
+            store_path = store.extract_wheel(wheel, content_hash)
 
         with WheelFile.open(wheel) as source:
             try:
