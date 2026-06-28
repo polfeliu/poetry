@@ -99,12 +99,21 @@ class WheelDestination(SchemeDictionaryDestination):
         # Check if we should link from store
         if self._store_path and self._link_mode != "copy":
             store_file = self._store_path / path
-            if store_file.exists():
-                # Files that must always be copied (not linked)
-                force_copy = path.endswith(".dist-info/RECORD") or \
-                           path.endswith(".dist-info/direct_url.json") or \
-                           path.endswith(".dist-info/.pth") or \
-                           path == ""
+
+            force_copy = (
+                path.endswith(".dist-info/RECORD")
+                or path.endswith(".dist-info/direct_url.json")
+                or path.endswith(".dist-info/.pth")
+                or path == ""
+            )
+
+            if not store_file.exists():
+                # Populate store on first install
+                store_file.parent.mkdir(parents=True, exist_ok=True)
+                with store_file.open("wb") as f:
+                    hash_, size = copyfileobj_with_hashing(
+                        stream, f, self.hash_algorithm
+                    )
 
                 link_or_copy(
                     store_file,
@@ -114,17 +123,29 @@ class WheelDestination(SchemeDictionaryDestination):
                     force_copy=force_copy,
                 )
 
-                # Calculate hash and size for the record
-                hash_ = hashlib.sha256()
-                with target_path.open("rb") as f:
-                    while chunk := f.read(65536):
-                        hash_.update(chunk)
-                hash_ = hash_.hexdigest()
-                size = target_path.stat().st_size
+                return RecordEntry(
+                    path, Hash(self.hash_algorithm, hash_), size
+                )
 
-                return RecordEntry(path, Hash(self.hash_algorithm, hash_), size)
+            # Store file exists — link from store
+            link_or_copy(
+                store_file,
+                target_path,
+                link_mode=self._link_mode,
+                is_executable=is_executable,
+                force_copy=force_copy,
+            )
 
-        # Fallback to normal copy
+            # Calculate hash and size for the record
+            hash_ = hashlib.sha256()
+            with target_path.open("rb") as f:
+                while chunk := f.read(65536):
+                    hash_.update(chunk)
+            hash_ = hash_.hexdigest()
+            size = target_path.stat().st_size
+
+            return RecordEntry(path, Hash(self.hash_algorithm, hash_), size)
+
         with target_path.open("wb") as f:
             hash_, size = copyfileobj_with_hashing(stream, f, self.hash_algorithm)
 
@@ -165,8 +186,8 @@ class WheelInstaller:
         # Import here to avoid circular imports
         from poetry.installation.unpacked_wheel_store import UnpackedWheelStore
 
-        # Extract wheel to unpacked store if using link mode and hash is known
-        store_path = None
+        # Compute store entry path (don't extract — done lazily per-file)
+        store_entry_path = None
         if self._link_mode != "copy" and content_hash is not None:
             cache_base = (
                 self._store_base_path
@@ -174,7 +195,7 @@ class WheelInstaller:
                 else self._env.path / ".." / ".." / "cache"
             )
             store = UnpackedWheelStore(cache_base)
-            store_path = store.extract_wheel(wheel, content_hash)
+            store_entry_path = store.get_store_path(content_hash)
 
         with WheelFile.open(wheel) as source:
             try:
@@ -195,7 +216,7 @@ class WheelInstaller:
                 script_kind=self._script_kind,
                 bytecode_optimization_levels=self._bytecode_optimization_levels,
                 link_mode=self._link_mode,
-                store_path=store_path,
+                store_path=store_entry_path,
             )
 
             install(
