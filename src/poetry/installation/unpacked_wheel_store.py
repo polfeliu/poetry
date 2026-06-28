@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import hashlib
 import shutil
 import zipfile
 from pathlib import Path
 from typing import TYPE_CHECKING
+from typing import Iterator
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -108,17 +108,18 @@ class UnpackedWheelStore:
 
         return self.cache_dir.iterdir()
 
-    def prune_unreferenced(self) -> int:
+    def prune_unreferenced(self, dry_run: bool = False) -> Iterator[Path]:
         """
         Prune store entries that are no longer referenced by any venv.
 
         Uses link counts to determine if files are still in use.
 
-        Returns:
-            Number of entries pruned
-        """
-        pruned_count = 0
+        Args:
+            dry_run: If True, yield entries that would be pruned without deleting.
 
+        Yields:
+            Path of each store entry that was pruned (or would be pruned in dry run).
+        """
         for store_entry in self.list_entries():
             if not store_entry.is_dir():
                 continue
@@ -130,14 +131,9 @@ class UnpackedWheelStore:
 
             # Check link counts of files in the store
             try:
-                # Get all files in the store entry
-                files = list(store_entry.rglob("*"))
-                if not files:
-                    continue
-
                 # Check if any file has link count > 1 (referenced by venv)
                 is_referenced = False
-                for file_path in files:
+                for file_path in store_entry.rglob("*"):
                     if file_path.is_file():
                         try:
                             link_count = file_path.stat().st_nlink
@@ -147,16 +143,15 @@ class UnpackedWheelStore:
                         except (OSError, FileNotFoundError):
                             continue
 
-                # Only prune if no files are referenced
+                # Yield if unreferenced
                 if not is_referenced:
-                    shutil.rmtree(store_entry)
-                    pruned_count += 1
+                    if not dry_run:
+                        shutil.rmtree(store_entry)
+                    yield store_entry
 
             except OSError:
                 # Entry is likely in use or corrupted, skip it
                 continue
-
-        return pruned_count
 
     def clear(self) -> None:
         """

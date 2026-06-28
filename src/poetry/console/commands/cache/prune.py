@@ -14,19 +14,14 @@ if TYPE_CHECKING:
     from cleo.io.inputs.option import Option
 
 
-class CachePruneCommand(Command):
-    name = "cache prune"
-    description = "Prune unreferenced entries from the unpacked wheel store."
+class CacheGcCommand(Command):
+    name = "cache gc"
+    description = "Remove unreferenced entries from the unpacked wheel store."
 
     options: ClassVar[list[Option]] = [
         option(
             "dry-run",
-            description="Show what would be pruned without actually deleting anything.",
-            flag=True,
-        ),
-        option(
-            "all",
-            description="Prune all unreferenced entries (default behavior).",
+            description="Show what would be removed without actually deleting anything.",
             flag=True,
         ),
     ]
@@ -36,61 +31,23 @@ class CachePruneCommand(Command):
         cache_dir = config.artifacts_cache_directory
         store = UnpackedWheelStore(cache_dir)
 
-        self.line("<info>Checking unpacked wheel store for unreferenced entries...</info>")
+        self.line(
+            "<info>Checking unpacked wheel store for unreferenced entries...</info>"
+        )
 
         if not store.cache_dir.exists():
             self.line("No unpacked wheel store found.")
             return 0
 
-        # List all entries
-        entries = list(store.list_entries())
-        if not entries:
-            self.line("No entries found in unpacked wheel store.")
-            return 0
+        tag = "comment" if self.option("dry-run") else "info"
+        pruned = list(
+            store.prune_unreferenced(dry_run=self.option("dry-run"))
+        )
 
-        self.line(f"Found {len(entries)} entries in unpacked wheel store.")
-
-        if self.option("dry-run"):
-            self.line("\n<comment>Dry run - showing what would be pruned:</comment>")
-            pruned_count = 0
-            for entry in entries:
-                if not entry.is_dir():
-                    continue
-
-                # Check if this is a valid store entry
-                marker_file = entry / ".extracted"
-                if not marker_file.exists():
-                    continue
-
-                # Check if any file has link count > 1 (referenced by venv)
-                is_referenced = False
-                try:
-                    for file_path in entry.rglob("*"):
-                        if file_path.is_file():
-                            try:
-                                link_count = file_path.stat().st_nlink
-                                if link_count > 1:
-                                    is_referenced = True
-                                    break
-                            except (OSError, FileNotFoundError):
-                                continue
-                except OSError:
-                    continue
-
-                if not is_referenced:
-                    self.line(f"  Would prune: {entry.name}")
-                    pruned_count += 1
-                else:
-                    self.line(f"  Would keep: {entry.name} (linked by other venvs)")
-
-            self.line(f"\nWould prune {pruned_count} of {len(entries)} entries.")
-            return 0
-
-        # Actually prune
-        self.line("\nPruning unreferenced entries...")
-        pruned_count = store.prune_unreferenced()
-
-        self.line(f"\n<info>Pruned {pruned_count} unreferenced entries.</info>")
-        self.line(f"Kept {len(entries) - pruned_count} entries that are still referenced.")
+        if pruned:
+            for entry in pruned:
+                self.line(f"  <{tag}>Removed: {entry.name}</{tag}>")
+        else:
+            self.line("No unreferenced entries found.")
 
         return 0

@@ -110,8 +110,8 @@ def test_prune_unreferenced_removes_unused(
     store_path = store.extract_wheel(
         demo_wheel, "sha256:test_hash_for_prune"
     )
-    pruned = store.prune_unreferenced()
-    assert pruned == 1
+    pruned = list(store.prune_unreferenced())
+    assert len(pruned) == 1
     assert not store_path.exists()
 
 
@@ -131,8 +131,8 @@ def test_prune_referenced_is_kept(
     ref_dir.mkdir(parents=True, exist_ok=True)
     ref_file = ref_dir / store_file.name
     ref_file.hardlink_to(store_file)
-    pruned = store.prune_unreferenced()
-    assert pruned == 0
+    pruned = list(store.prune_unreferenced())
+    assert len(pruned) == 0
 
 
 def test_prune_skips_missing_marker(
@@ -143,5 +143,5 @@ def test_prune_skips_missing_marker(
     )
     (store_path / ".extracted").unlink()
 
-    pruned = store.prune_unreferenced()
-    assert pruned == 0
+    pruned = list(store.prune_unreferenced())
+    assert len(pruned) == 0

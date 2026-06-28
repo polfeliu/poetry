@@ -126,8 +126,8 @@ def test_prune_unreferenced_store_entry(
 
     shutil.rmtree(venv_path)
 
-    pruned = store.prune_unreferenced()
-    assert pruned == 1
+    pruned = list(store.prune_unreferenced())
+    assert len(pruned) == 1
     assert not entry.exists()
 
 
@@ -151,8 +151,8 @@ def test_prune_referenced_entry_kept(
     entry = store.get_store_path(content_hash)
     assert entry.exists()
 
-    pruned = store.prune_unreferenced()
-    assert pruned == 0
+    pruned = list(store.prune_unreferenced())
+    assert len(pruned) == 0
     assert entry.exists()
 
 
