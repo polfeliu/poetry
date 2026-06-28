@@ -9,6 +9,7 @@ import pytest
 
 from poetry.core.constraints.version import parse_constraint
 
+from poetry.installation.unpacked_wheel_store import UnpackedWheelStore
 from poetry.installation.wheel_installer import WheelInstaller
 from poetry.utils._compat import WINDOWS
 from poetry.utils.env import MockEnv
@@ -157,14 +158,9 @@ def test_hardlink_installer_file_contains_valid_version(
     parse_constraint(match.group("version"))
 
 
-def _store_dir(env: MockEnv) -> Path:
-    return (env.path / ".." / ".." / "cache" / "unpacked").resolve()
-
-
 def _store_entry_for_hash(env: MockEnv, content_hash: str) -> Path:
-    store = _store_dir(env)
-    key = content_hash.replace(":", "-")[:16]
-    return store / key
+    cache_base = env.path / ".." / ".." / "cache"
+    return UnpackedWheelStore(cache_base).get_store_path(content_hash)
 
 
 def test_hardlink_installation_store_created(

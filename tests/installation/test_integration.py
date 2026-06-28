@@ -17,10 +17,6 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.integration
 
 
-def _store_dir(env: VirtualEnv) -> Path:
-    return (env.path / ".." / ".." / "cache" / "unpacked").resolve()
-
-
 @pytest.fixture(scope="module")
 def demo_wheel(fixture_dir: FixtureDirGetter) -> Path:
     return fixture_dir("distributions/demo-0.1.0-py2.py3-none-any.whl")
@@ -36,7 +32,9 @@ def test_hardlink_install_into_real_venv(
     assert (purelib / "demo" / "__init__.py").exists()
     assert (purelib / "demo-0.1.0.dist-info" / "METADATA").exists()
 
-    store = _store_dir(tmp_venv)
+    store = UnpackedWheelStore(
+        tmp_venv.path / ".." / ".." / "cache"
+    ).get_store_path("sha256:test_real_venv")
     assert store.exists()
 
 
@@ -208,8 +206,11 @@ def test_hardlink_links_from_store_to_venv(
     init_py = purelib / "demo" / "__init__.py"
     assert init_py.exists()
 
-    store = _store_dir(tmp_venv)
-    entry_key = content_hash.replace(":", "-")[:16]
-    store_init = store / entry_key / "demo" / "__init__.py"
+    cache_base = tmp_venv.path / ".." / ".." / "cache"
+    store_init = (
+        UnpackedWheelStore(cache_base).get_store_path(content_hash)
+        / "demo"
+        / "__init__.py"
+    )
     assert store_init.exists()
     assert store_init.stat().st_ino == init_py.stat().st_ino

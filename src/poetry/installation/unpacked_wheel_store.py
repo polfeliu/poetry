@@ -38,9 +38,8 @@ class UnpackedWheelStore:
         Returns:
             Path to the unpacked wheel directory in the store
         """
-        # Normalize algorithm:prefix separator and use first 16 hex chars as key
         key = content_hash.replace(":", "-")
-        return self.cache_dir / key[:16]
+        return self.cache_dir / key
 
     def extract_wheel(self, wheel_path: Path, content_hash: str) -> Path:
         """
