@@ -46,8 +46,9 @@ def test_hardlink_shared_store_two_venvs(tmp_path: Path, demo_wheel: Path) -> No
 
     from poetry.utils.env.env_manager import EnvManager
 
-    venv_a_path = tmp_path / "venv_a"
-    venv_b_path = tmp_path / "venv_b"
+    nested = tmp_path / "nested"
+    venv_a_path = nested / "venv_a"
+    venv_b_path = nested / "venv_b"
     EnvManager.build_venv(venv_a_path)
     EnvManager.build_venv(venv_b_path)
     venv_a = VirtualEnv(venv_a_path)
@@ -75,7 +76,7 @@ def test_hardlink_shared_store_two_venvs(tmp_path: Path, demo_wheel: Path) -> No
 def test_hardlink_content_hash_isolation(tmp_path: Path, demo_wheel: Path) -> None:
     from poetry.utils.env.env_manager import EnvManager
 
-    venv_path = tmp_path / "venv"
+    venv_path = tmp_path / "nested" / "venv"
     EnvManager.build_venv(venv_path)
     venv = VirtualEnv(venv_path)
 
@@ -98,7 +99,7 @@ def test_prune_unreferenced_store_entry(tmp_path: Path, demo_wheel: Path) -> Non
 
     from poetry.utils.env.env_manager import EnvManager
 
-    venv_path = tmp_path / "venv"
+    venv_path = tmp_path / "nested" / "venv"
     EnvManager.build_venv(venv_path)
     venv = VirtualEnv(venv_path)
 
@@ -121,7 +122,7 @@ def test_prune_unreferenced_store_entry(tmp_path: Path, demo_wheel: Path) -> Non
 def test_prune_referenced_entry_kept(tmp_path: Path, demo_wheel: Path) -> None:
     from poetry.utils.env.env_manager import EnvManager
 
-    venv_path = tmp_path / "venv"
+    venv_path = tmp_path / "nested" / "venv"
     EnvManager.build_venv(venv_path)
     venv = VirtualEnv(venv_path)
 
