@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import stat
+import sys
 
 from typing import TYPE_CHECKING
 
@@ -55,6 +56,9 @@ def test_copy_file_basic(tmp_path: Path) -> None:
     assert dst.read_text() == "content"
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="Windows does not support Unix executable bits"
+)
 def test_copy_file_executable(tmp_path: Path) -> None:
     src = tmp_path / "src.sh"
     dst = tmp_path / "dst.sh"
@@ -89,6 +93,9 @@ def test_link_or_copy_fallback_to_copy(tmp_path: Path) -> None:
     assert dst.read_text() == "content"
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="Windows does not support Unix executable bits"
+)
 def test_link_or_copy_executable(tmp_path: Path) -> None:
     src = tmp_path / "src.sh"
     dst = tmp_path / "dst.sh"
