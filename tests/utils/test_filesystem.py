@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import stat
-from pathlib import Path
+
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -10,6 +11,10 @@ from poetry.utils.filesystem import copy_file
 from poetry.utils.filesystem import link_or_copy
 from poetry.utils.filesystem import try_hardlink
 from poetry.utils.filesystem import try_reflink
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_try_hardlink_creates_link(tmp_path: Path) -> None:
@@ -104,17 +109,6 @@ def test_link_or_copy_fallback_to_copy(tmp_path: Path) -> None:
     assert dst.read_text() == "content"
 
 
-def test_link_or_copy_force_copy(tmp_path: Path) -> None:
-    src = tmp_path / "src.txt"
-    dst = tmp_path / "dst.txt"
-    src.write_text("content")
-
-    link_or_copy(src, dst, link_mode=LinkMode.HARDLINK, force_copy=True)
-    assert dst.exists()
-    assert dst.read_text() == "content"
-    assert dst.stat().st_ino != src.stat().st_ino
-
-
 def test_link_or_copy_executable(tmp_path: Path) -> None:
     src = tmp_path / "src.sh"
     dst = tmp_path / "dst.sh"
@@ -151,6 +145,3 @@ def test_copy_file_creates_parent_dirs(tmp_path: Path) -> None:
 
     copy_file(src, dst)
     assert dst.exists()
-
-
-

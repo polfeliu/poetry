@@ -55,11 +55,6 @@ class UnpackedWheelStore:
     ) -> RecordEntry:
         store_file = self.get_store_path(store_key) / path
 
-        force_copy = path.endswith(
-            (".dist-info/RECORD", ".dist-info/direct_url.json", ".dist-info/.pth")
-        )
-        # RECORD, direct_url.json, .pth must be unique per venv — always copy.
-
         if not store_file.exists():
             store_file.parent.mkdir(parents=True, exist_ok=True)
             with store_file.open("wb") as f:
@@ -70,7 +65,6 @@ class UnpackedWheelStore:
                 target_path,
                 link_mode=link_mode,
                 is_executable=is_executable,
-                force_copy=force_copy,
             )
 
             return RecordEntry(path, Hash(hash_algorithm, hash_), size)
@@ -81,7 +75,6 @@ class UnpackedWheelStore:
             target_path,
             link_mode=link_mode,
             is_executable=is_executable,
-            force_copy=force_copy,
         )
 
         hash_ = get_file_hash(store_file, hash_algorithm)

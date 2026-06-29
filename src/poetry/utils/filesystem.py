@@ -69,12 +69,7 @@ def link_or_copy(
     *,
     link_mode: LinkMode = LinkMode.COPY,
     is_executable: bool = False,
-    force_copy: bool = False,
 ) -> None:
-    if force_copy:
-        copy_file(src, dst, is_executable)
-        return
-
     if link_mode is LinkMode.REFLINK:
         if try_reflink(src, dst):
             return

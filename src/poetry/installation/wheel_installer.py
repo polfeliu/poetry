@@ -98,7 +98,16 @@ class WheelDestination(SchemeDictionaryDestination):
             # that two threads try to create the directory.
             parent_folder.mkdir(parents=True, exist_ok=True)
 
-        if self._store is not None and self._link_mode is not LinkMode.COPY:
+        # RECORD, direct_url.json, .pth must be unique per venv — write directly.
+        force_copy = path.endswith(
+            (".dist-info/RECORD", ".dist-info/direct_url.json", ".dist-info/.pth")
+        )
+
+        if (
+            self._store is not None
+            and self._link_mode is not LinkMode.COPY
+            and not force_copy
+        ):
             return self._store.write_file(
                 store_key=self._store_key,
                 path=path,
