@@ -33,18 +33,16 @@ def test_hardlink_install_into_real_venv(
     assert (purelib / "demo" / "__init__.py").exists()
     assert (purelib / "demo-0.1.0.dist-info" / "METADATA").exists()
 
-    store = UnpackedWheelStore(
-        tmp_venv.path / ".." / ".." / "cache"
-    ).get_store_path("sha256:test_real_venv")
+    store = UnpackedWheelStore(tmp_venv.path / ".." / ".." / "cache").get_store_path(
+        "sha256:test_real_venv"
+    )
     assert store.exists()
 
 
-def test_hardlink_shared_store_two_venvs(
-    tmp_path: Path, demo_wheel: Path
-) -> None:
-    from poetry.utils.env.env_manager import EnvManager
-
+def test_hardlink_shared_store_two_venvs(tmp_path: Path, demo_wheel: Path) -> None:
     import shutil
+
+    from poetry.utils.env.env_manager import EnvManager
 
     venv_a_path = tmp_path / "venv_a"
     venv_b_path = tmp_path / "venv_b"
@@ -54,22 +52,15 @@ def test_hardlink_shared_store_two_venvs(
     venv_b = VirtualEnv(venv_b_path)
 
     content_hash = "sha256:test_shared_store_integration"
-    cache_dir = tmp_path / "cache"
-    installer_a = WheelInstaller(
-        venv_a, link_mode=LinkMode.HARDLINK, store_base_path=cache_dir
-    )
-    installer_b = WheelInstaller(
-        venv_b, link_mode=LinkMode.HARDLINK, store_base_path=cache_dir
-    )
+    installer_a = WheelInstaller(venv_a, link_mode=LinkMode.HARDLINK)
+    installer_b = WheelInstaller(venv_b, link_mode=LinkMode.HARDLINK)
     installer_a.install(demo_wheel, content_hash=content_hash)
     installer_b.install(demo_wheel, content_hash=content_hash)
 
-    store = UnpackedWheelStore(cache_dir)
+    store = UnpackedWheelStore(tmp_path / "cache")
     entry = store.get_store_path(content_hash)
     assert entry.exists()
-    hardlinked = [
-        f for f in entry.rglob("*") if f.is_file() and f.suffix == ".py"
-    ]
+    hardlinked = [f for f in entry.rglob("*") if f.is_file() and f.suffix == ".py"]
     assert len(hardlinked) > 0
     for f in hardlinked:
         assert f.stat().st_nlink > 1, f"Not hardlinked: {f}"
@@ -78,9 +69,7 @@ def test_hardlink_shared_store_two_venvs(
     shutil.rmtree(venv_b_path)
 
 
-def test_hardlink_content_hash_isolation(
-    tmp_path: Path, demo_wheel: Path
-) -> None:
+def test_hardlink_content_hash_isolation(tmp_path: Path, demo_wheel: Path) -> None:
     from poetry.utils.env.env_manager import EnvManager
 
     venv_path = tmp_path / "venv"
@@ -90,36 +79,30 @@ def test_hardlink_content_hash_isolation(
     hash_a = "sha256:" + "a" * 64
     hash_b = "sha256:" + "b" * 64
 
-    cache_dir = tmp_path / "cache"
-    installer = WheelInstaller(venv, link_mode=LinkMode.HARDLINK, store_base_path=cache_dir)
+    installer = WheelInstaller(venv, link_mode=LinkMode.HARDLINK)
     installer.install(demo_wheel, content_hash=hash_a)
     installer.install(demo_wheel, content_hash=hash_b)
 
-    store = UnpackedWheelStore(cache_dir)
+    store = UnpackedWheelStore(tmp_path / "cache")
     assert store.get_store_path(hash_a).exists()
     assert store.get_store_path(hash_b).exists()
     assert store.get_store_path(hash_a) != store.get_store_path(hash_b)
 
 
-def test_prune_unreferenced_store_entry(
-    tmp_path: Path, demo_wheel: Path
-) -> None:
-    from poetry.utils.env.env_manager import EnvManager
-
+def test_prune_unreferenced_store_entry(tmp_path: Path, demo_wheel: Path) -> None:
     import shutil
+
+    from poetry.utils.env.env_manager import EnvManager
 
     venv_path = tmp_path / "venv"
     EnvManager.build_venv(venv_path)
     venv = VirtualEnv(venv_path)
 
     content_hash = "sha256:test_prune_me"
-    cache_dir = tmp_path / "cache"
-    installer = WheelInstaller(
-        venv, link_mode=LinkMode.HARDLINK, store_base_path=cache_dir
-    )
+    installer = WheelInstaller(venv, link_mode=LinkMode.HARDLINK)
     installer.install(demo_wheel, content_hash=content_hash)
 
-    store = UnpackedWheelStore(cache_dir)
+    store = UnpackedWheelStore(tmp_path / "cache")
     entry = store.get_store_path(content_hash)
     assert entry.exists()
 
@@ -130,9 +113,7 @@ def test_prune_unreferenced_store_entry(
     assert not entry.exists()
 
 
-def test_prune_referenced_entry_kept(
-    tmp_path: Path, demo_wheel: Path
-) -> None:
+def test_prune_referenced_entry_kept(tmp_path: Path, demo_wheel: Path) -> None:
     from poetry.utils.env.env_manager import EnvManager
 
     venv_path = tmp_path / "venv"
@@ -140,13 +121,10 @@ def test_prune_referenced_entry_kept(
     venv = VirtualEnv(venv_path)
 
     content_hash = "sha256:test_keep_me"
-    cache_dir = tmp_path / "cache"
-    installer = WheelInstaller(
-        venv, link_mode=LinkMode.HARDLINK, store_base_path=cache_dir
-    )
+    installer = WheelInstaller(venv, link_mode=LinkMode.HARDLINK)
     installer.install(demo_wheel, content_hash=content_hash)
 
-    store = UnpackedWheelStore(cache_dir)
+    store = UnpackedWheelStore(tmp_path / "cache")
     entry = store.get_store_path(content_hash)
     assert entry.exists()
 
@@ -155,15 +133,11 @@ def test_prune_referenced_entry_kept(
     assert entry.exists()
 
 
-def test_installed_package_importable(
-    tmp_venv: VirtualEnv, demo_wheel: Path
-) -> None:
+def test_installed_package_importable(tmp_venv: VirtualEnv, demo_wheel: Path) -> None:
     installer = WheelInstaller(tmp_venv, link_mode=LinkMode.HARDLINK)
     installer.install(demo_wheel, content_hash="sha256:test_import")
 
-    output = tmp_venv.run_python_script(
-        "import demo; print(demo.__file__, end='')"
-    )
+    output = tmp_venv.run_python_script("import demo; print(demo.__file__, end='')")
     assert output
     purelib = Path(tmp_venv.paths["purelib"])
     assert str(purelib) in output

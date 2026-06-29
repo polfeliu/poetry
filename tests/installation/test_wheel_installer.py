@@ -120,9 +120,7 @@ def test_no_path_traversal(
 
 
 @pytest.fixture(scope="module")
-def hardlink_installation(
-    tmp_path_factory: TempPathFactory, demo_wheel: Path
-) -> Path:
+def hardlink_installation(tmp_path_factory: TempPathFactory, demo_wheel: Path) -> Path:
     env = MockEnv(path=tmp_path_factory.mktemp("hardlink_install"))
     installer = WheelInstaller(env, link_mode=LinkMode.HARDLINK)
     installer.install(demo_wheel, content_hash="sha256:test_demo_wheel")
@@ -164,9 +162,7 @@ def _store_entry_for_hash(env: MockEnv, content_hash: str) -> Path:
     return UnpackedWheelStore(cache_base).get_store_path(content_hash)
 
 
-def test_hardlink_installation_store_created(
-    tmp_path: Path, demo_wheel: Path
-) -> None:
+def test_hardlink_installation_store_created(tmp_path: Path, demo_wheel: Path) -> None:
     env = MockEnv(path=tmp_path / "env")
     installer = WheelInstaller(env, link_mode=LinkMode.HARDLINK)
     content_hash = "sha256:test_store_created"
@@ -190,9 +186,7 @@ def test_hardlink_store_shared(tmp_path: Path, demo_wheel: Path) -> None:
     hardlinkable = [
         f
         for f in entry.rglob("*")
-        if f.is_file()
-        and f.name not in (".extracted",)
-        and f.suffix in (".py", ".pth")
+        if f.is_file() and f.name not in (".extracted",) and f.suffix in (".py", ".pth")
     ]
     assert len(hardlinkable) > 0, "No hardlinkable files in store"
     for f in hardlinkable:
@@ -210,9 +204,7 @@ def test_hardlink_install_creates_extracted_marker(
     assert (entry / ".extracted").exists()
 
 
-def test_hardlink_incomplete_entry_recovered(
-    tmp_path: Path, demo_wheel: Path
-) -> None:
+def test_hardlink_incomplete_entry_recovered(tmp_path: Path, demo_wheel: Path) -> None:
     env = MockEnv(path=tmp_path / "env")
     installer = WheelInstaller(env, link_mode=LinkMode.HARDLINK)
     content_hash = "sha256:test_incomplete_recovery"
@@ -260,9 +252,7 @@ def test_default_installation_uses_copy(env: MockEnv, demo_wheel: Path) -> None:
     assert source_dir.exists()
 
 
-def test_enable_bytecode_compilation_hardlink(
-    tmp_path: Path, demo_wheel: Path
-) -> None:
+def test_enable_bytecode_compilation_hardlink(tmp_path: Path, demo_wheel: Path) -> None:
     env = MockEnv(path=tmp_path / "env")
     installer = WheelInstaller(env, link_mode=LinkMode.HARDLINK)
     installer.enable_bytecode_compilation(True)

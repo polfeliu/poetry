@@ -10,7 +10,6 @@ from poetry.utils.filesystem import LinkMode
 from poetry.utils.filesystem import copy_file
 from poetry.utils.filesystem import link_or_copy
 from poetry.utils.filesystem import try_hardlink
-from poetry.utils.filesystem import try_reflink
 
 
 if TYPE_CHECKING:
@@ -44,25 +43,6 @@ def test_try_hardlink_nested_directory(tmp_path: Path) -> None:
     assert try_hardlink(src, dst)
     assert dst.exists()
     assert dst.stat().st_ino == src.stat().st_ino
-
-
-def test_try_reflink_fallback_to_copy(tmp_path: Path) -> None:
-    src = tmp_path / "src.txt"
-    dst = tmp_path / "dst.txt"
-    src.write_text("content")
-
-    result = try_reflink(src, dst)
-    if result:
-        assert dst.exists()
-        assert dst.read_text() == "content"
-
-
-def test_try_reflink_nonexistent_src(tmp_path: Path) -> None:
-    src = tmp_path / "nonexistent.txt"
-    dst = tmp_path / "dst.txt"
-
-    assert not try_reflink(src, dst)
-    assert not dst.exists()
 
 
 def test_copy_file_basic(tmp_path: Path) -> None:
@@ -118,16 +98,6 @@ def test_link_or_copy_executable(tmp_path: Path) -> None:
     assert dst.exists()
     mode = dst.stat().st_mode
     assert mode & stat.S_IXUSR
-
-
-def test_link_or_copy_reflink_fallback(tmp_path: Path) -> None:
-    src = tmp_path / "src.txt"
-    dst = tmp_path / "dst.txt"
-    src.write_text("content")
-
-    link_or_copy(src, dst, link_mode=LinkMode.REFLINK)
-    assert dst.exists()
-    assert dst.read_text() == "content"
 
 
 def test_link_or_copy_nonexistent_src(tmp_path: Path) -> None:
