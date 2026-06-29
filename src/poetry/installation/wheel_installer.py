@@ -98,10 +98,10 @@ class WheelDestination(SchemeDictionaryDestination):
             # that two threads try to create the directory.
             parent_folder.mkdir(parents=True, exist_ok=True)
 
-        # RECORD, direct_url.json, .pth must be unique per venv — write directly.
+        # RECORD, direct_url.json, .pth, and scripts must be unique per venv — write directly.
         force_copy = path.endswith(
             (".dist-info/RECORD", ".dist-info/direct_url.json", ".dist-info/.pth")
-        )
+        ) or scheme == "scripts"
 
         if (
             self._store is not None

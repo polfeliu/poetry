@@ -46,6 +46,9 @@ def link_or_copy(
     link_mode: LinkMode = LinkMode.COPY,
     is_executable: bool = False,
 ) -> None:
+    if dst.exists() and src.samefile(dst):
+        return
+
     if link_mode is LinkMode.HARDLINK:
         if try_hardlink(src, dst):
             return
