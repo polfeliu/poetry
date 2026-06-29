@@ -83,6 +83,35 @@ jobs:
       # Smoke test: confirm the version of the installed wheel matches the project.
       - run: poetry@build --version | grep $(poetry version --short)
 
+  hardlink-e2e:
+    name: Hardlink E2E (${{ matrix.os.name }})
+    runs-on: ${{ matrix.os.image }}
+    if: needs.changes.outputs.tests == 'true'
+    needs: changes
+    strategy:
+      matrix:
+        os:
+          - name: Windows
+            image: windows-2022
+          - name: macOS
+            image: macos-14
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/bootstrap-poetry
+        with:
+          python-version: "3.12"
+
+      - uses: ./.github/actions/poetry-install
+
+      - run: poetry run pytest tests/installation/test_wheel_installer.py tests/installation/test_unpacked_wheel_store.py tests/utils/test_filesystem.py -v
+
+      - if: runner.os != 'Windows'
+        run: poetry run pytest tests/installation/test_integration.py --integration -v
+
   tests-matrix:
     # Use this matrix with multiple jobs defined in a reusable workflow:
     uses: ./.github/workflows/.tests-matrix.yaml
@@ -114,6 +143,7 @@ jobs:
     needs:
       - lockfile
       - smoke
+      - hardlink-e2e
       - tests-matrix
     steps:
       - run: ${{ (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) && 'false' || 'true' }}
