@@ -13,6 +13,7 @@ from poetry.installation.unpacked_wheel_store import UnpackedWheelStore
 from poetry.installation.wheel_installer import WheelInstaller
 from poetry.utils._compat import WINDOWS
 from poetry.utils.env import MockEnv
+from poetry.utils.filesystem import LinkMode
 
 
 if TYPE_CHECKING:
@@ -123,7 +124,7 @@ def hardlink_installation(
     tmp_path_factory: TempPathFactory, demo_wheel: Path
 ) -> Path:
     env = MockEnv(path=tmp_path_factory.mktemp("hardlink_install"))
-    installer = WheelInstaller(env, link_mode="hardlink")
+    installer = WheelInstaller(env, link_mode=LinkMode.HARDLINK)
     installer.install(demo_wheel, content_hash="sha256:test_demo_wheel")
     return Path(env.paths["purelib"])
 
@@ -167,7 +168,7 @@ def test_hardlink_installation_store_created(
     tmp_path: Path, demo_wheel: Path
 ) -> None:
     env = MockEnv(path=tmp_path / "env")
-    installer = WheelInstaller(env, link_mode="hardlink")
+    installer = WheelInstaller(env, link_mode=LinkMode.HARDLINK)
     content_hash = "sha256:test_store_created"
     installer.install(demo_wheel, content_hash=content_hash)
     entry = _store_entry_for_hash(env, content_hash)
@@ -177,8 +178,8 @@ def test_hardlink_installation_store_created(
 def test_hardlink_store_shared(tmp_path: Path, demo_wheel: Path) -> None:
     env_a = MockEnv(path=tmp_path / "env_a")
     env_b = MockEnv(path=tmp_path / "env_b")
-    installer_a = WheelInstaller(env_a, link_mode="hardlink")
-    installer_b = WheelInstaller(env_b, link_mode="hardlink")
+    installer_a = WheelInstaller(env_a, link_mode=LinkMode.HARDLINK)
+    installer_b = WheelInstaller(env_b, link_mode=LinkMode.HARDLINK)
     content_hash = "sha256:test_shared_store"
 
     installer_a.install(demo_wheel, content_hash=content_hash)
@@ -202,7 +203,7 @@ def test_hardlink_install_creates_extracted_marker(
     tmp_path: Path, demo_wheel: Path
 ) -> None:
     env = MockEnv(path=tmp_path / "env")
-    installer = WheelInstaller(env, link_mode="hardlink")
+    installer = WheelInstaller(env, link_mode=LinkMode.HARDLINK)
     content_hash = "sha256:test_marker_created"
     installer.install(demo_wheel, content_hash=content_hash)
     entry = _store_entry_for_hash(env, content_hash)
@@ -213,7 +214,7 @@ def test_hardlink_incomplete_entry_recovered(
     tmp_path: Path, demo_wheel: Path
 ) -> None:
     env = MockEnv(path=tmp_path / "env")
-    installer = WheelInstaller(env, link_mode="hardlink")
+    installer = WheelInstaller(env, link_mode=LinkMode.HARDLINK)
     content_hash = "sha256:test_incomplete_recovery"
 
     # Create a partial store entry with some files but no .extracted marker
@@ -236,7 +237,7 @@ def test_hardlink_incomplete_entry_recovered(
 
 def test_hardlink_no_store_without_hash(tmp_path: Path, demo_wheel: Path) -> None:
     env = MockEnv(path=tmp_path / "env")
-    installer = WheelInstaller(env, link_mode="hardlink")
+    installer = WheelInstaller(env, link_mode=LinkMode.HARDLINK)
     installer.install(demo_wheel)
 
     purelib = Path(env.paths["purelib"])
@@ -245,7 +246,7 @@ def test_hardlink_no_store_without_hash(tmp_path: Path, demo_wheel: Path) -> Non
 
 def test_copy_mode_no_store(tmp_path: Path, demo_wheel: Path) -> None:
     env = MockEnv(path=tmp_path / "env")
-    installer = WheelInstaller(env, link_mode="copy")
+    installer = WheelInstaller(env, link_mode=LinkMode.COPY)
     installer.install(demo_wheel, content_hash="sha256:test_copy_no_store")
 
     purelib = Path(env.paths["purelib"])
@@ -263,7 +264,7 @@ def test_enable_bytecode_compilation_hardlink(
     tmp_path: Path, demo_wheel: Path
 ) -> None:
     env = MockEnv(path=tmp_path / "env")
-    installer = WheelInstaller(env, link_mode="hardlink")
+    installer = WheelInstaller(env, link_mode=LinkMode.HARDLINK)
     installer.enable_bytecode_compilation(True)
     installer.install(demo_wheel, content_hash="sha256:test_bytecode")
     cache_dir = Path(env.paths["purelib"]) / "demo" / "__pycache__"

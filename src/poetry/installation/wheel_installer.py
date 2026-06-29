@@ -16,6 +16,8 @@ from installer.sources import _WheelFileValidationError
 
 from poetry.__version__ import __version__
 from poetry.utils._compat import WINDOWS
+from poetry.utils.filesystem import LinkMode
+
 
 if TYPE_CHECKING:
     from collections.abc import Collection
@@ -33,15 +35,13 @@ logger = logging.getLogger(__name__)
 
 
 class WheelDestination(SchemeDictionaryDestination):
-    """ """
-
     def __init__(
         self,
         scheme_dict: dict[str, str],
         interpreter: str,
         script_kind: LauncherKind,
         bytecode_optimization_levels: Collection[int],
-        link_mode: str = "copy",
+        link_mode: LinkMode = LinkMode.COPY,
         store: UnpackedWheelStore | None = None,
         store_key: str | None = None,
     ) -> None:
@@ -98,7 +98,7 @@ class WheelDestination(SchemeDictionaryDestination):
             # that two threads try to create the directory.
             parent_folder.mkdir(parents=True, exist_ok=True)
 
-        if self._store is not None and self._link_mode != "copy":
+        if self._store is not None and self._link_mode is not LinkMode.COPY:
             return self._store.write_file(
                 store_key=self._store_key,
                 path=path,
@@ -122,7 +122,7 @@ class WheelInstaller:
     def __init__(
         self,
         env: Env,
-        link_mode: str = "copy",
+        link_mode: LinkMode = LinkMode.COPY,
         store_base_path: Path | None = None,
     ) -> None:
         self._env = env
@@ -146,11 +146,10 @@ class WheelInstaller:
         self._bytecode_optimization_levels = (-1,) if enable else ()
 
     def install(self, wheel: Path, content_hash: str | None = None) -> None:
-        # Import here to avoid circular imports
         from poetry.installation.unpacked_wheel_store import UnpackedWheelStore
 
         store: UnpackedWheelStore | None = None
-        if self._link_mode != "copy" and content_hash is not None:
+        if self._link_mode is not LinkMode.COPY and content_hash is not None:
             cache_base = (
                 self._store_base_path
                 if self._store_base_path is not None
@@ -158,10 +157,8 @@ class WheelInstaller:
             )
             store = UnpackedWheelStore(cache_base)
 
-            # Crash recovery: if the store entry exists but is incomplete
-            # (e.g. previous extraction crashed mid-way), remove it so
-            # we start fresh. This also handles concurrent extractions:
-            # only one process wins, the other re-extracts.
+            # Remove incomplete entries (missing .extracted marker).
+            # Handles crash and concurrent-extraction recovery.
             if not store.is_extracted(content_hash):
                 store_path = store.get_store_path(content_hash)
                 if store_path.exists():

@@ -23,6 +23,7 @@ from poetry.locations import CONFIG_DIR
 from poetry.locations import DEFAULT_CACHE_DIR
 from poetry.locations import data_dir
 from poetry.toml import TOMLFile
+from poetry.utils.filesystem import LinkMode
 
 
 if TYPE_CHECKING:
@@ -50,7 +51,7 @@ def str_list_normalizer(val: str) -> list[str]:
 
 
 def link_mode_validator(val: str) -> bool:
-    return val in {"copy", "hardlink", "reflink"}
+    return val in {m.value for m in LinkMode}
 
 
 def link_mode_normalizer(val: str) -> str:

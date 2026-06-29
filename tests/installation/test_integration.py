@@ -8,6 +8,7 @@ import pytest
 from poetry.installation.unpacked_wheel_store import UnpackedWheelStore
 from poetry.installation.wheel_installer import WheelInstaller
 from poetry.utils.env import VirtualEnv
+from poetry.utils.filesystem import LinkMode
 
 
 if TYPE_CHECKING:
@@ -25,7 +26,7 @@ def demo_wheel(fixture_dir: FixtureDirGetter) -> Path:
 def test_hardlink_install_into_real_venv(
     tmp_venv: VirtualEnv, demo_wheel: Path
 ) -> None:
-    installer = WheelInstaller(tmp_venv, link_mode="hardlink")
+    installer = WheelInstaller(tmp_venv, link_mode=LinkMode.HARDLINK)
     installer.install(demo_wheel, content_hash="sha256:test_real_venv")
 
     purelib = Path(tmp_venv.paths["purelib"])
@@ -55,10 +56,10 @@ def test_hardlink_shared_store_two_venvs(
     content_hash = "sha256:test_shared_store_integration"
     cache_dir = tmp_path / "cache"
     installer_a = WheelInstaller(
-        venv_a, link_mode="hardlink", store_base_path=cache_dir
+        venv_a, link_mode=LinkMode.HARDLINK, store_base_path=cache_dir
     )
     installer_b = WheelInstaller(
-        venv_b, link_mode="hardlink", store_base_path=cache_dir
+        venv_b, link_mode=LinkMode.HARDLINK, store_base_path=cache_dir
     )
     installer_a.install(demo_wheel, content_hash=content_hash)
     installer_b.install(demo_wheel, content_hash=content_hash)
@@ -90,7 +91,7 @@ def test_hardlink_content_hash_isolation(
     hash_b = "sha256:" + "b" * 64
 
     cache_dir = tmp_path / "cache"
-    installer = WheelInstaller(venv, link_mode="hardlink", store_base_path=cache_dir)
+    installer = WheelInstaller(venv, link_mode=LinkMode.HARDLINK, store_base_path=cache_dir)
     installer.install(demo_wheel, content_hash=hash_a)
     installer.install(demo_wheel, content_hash=hash_b)
 
@@ -114,7 +115,7 @@ def test_prune_unreferenced_store_entry(
     content_hash = "sha256:test_prune_me"
     cache_dir = tmp_path / "cache"
     installer = WheelInstaller(
-        venv, link_mode="hardlink", store_base_path=cache_dir
+        venv, link_mode=LinkMode.HARDLINK, store_base_path=cache_dir
     )
     installer.install(demo_wheel, content_hash=content_hash)
 
@@ -141,7 +142,7 @@ def test_prune_referenced_entry_kept(
     content_hash = "sha256:test_keep_me"
     cache_dir = tmp_path / "cache"
     installer = WheelInstaller(
-        venv, link_mode="hardlink", store_base_path=cache_dir
+        venv, link_mode=LinkMode.HARDLINK, store_base_path=cache_dir
     )
     installer.install(demo_wheel, content_hash=content_hash)
 
@@ -157,7 +158,7 @@ def test_prune_referenced_entry_kept(
 def test_installed_package_importable(
     tmp_venv: VirtualEnv, demo_wheel: Path
 ) -> None:
-    installer = WheelInstaller(tmp_venv, link_mode="hardlink")
+    installer = WheelInstaller(tmp_venv, link_mode=LinkMode.HARDLINK)
     installer.install(demo_wheel, content_hash="sha256:test_import")
 
     output = tmp_venv.run_python_script(
@@ -171,7 +172,7 @@ def test_installed_package_importable(
 def test_bytecode_compilation_in_hardlink_mode(
     tmp_venv: VirtualEnv, demo_wheel: Path
 ) -> None:
-    installer = WheelInstaller(tmp_venv, link_mode="hardlink")
+    installer = WheelInstaller(tmp_venv, link_mode=LinkMode.HARDLINK)
     installer.enable_bytecode_compilation(True)
     installer.install(demo_wheel, content_hash="sha256:test_bytecode")
 
@@ -185,7 +186,7 @@ def test_bytecode_compilation_in_hardlink_mode(
 def test_copy_mode_in_real_venv_no_store(
     tmp_venv: VirtualEnv, demo_wheel: Path
 ) -> None:
-    installer = WheelInstaller(tmp_venv, link_mode="copy")
+    installer = WheelInstaller(tmp_venv, link_mode=LinkMode.COPY)
     installer.install(demo_wheel, content_hash="sha256:test_copy")
 
     purelib = Path(tmp_venv.paths["purelib"])
@@ -199,7 +200,7 @@ def test_hardlink_links_from_store_to_venv(
     tmp_venv: VirtualEnv, demo_wheel: Path
 ) -> None:
     content_hash = "sha256:test_hardlink_same_inode"
-    installer = WheelInstaller(tmp_venv, link_mode="hardlink")
+    installer = WheelInstaller(tmp_venv, link_mode=LinkMode.HARDLINK)
     installer.install(demo_wheel, content_hash=content_hash)
 
     purelib = Path(tmp_venv.paths["purelib"])
