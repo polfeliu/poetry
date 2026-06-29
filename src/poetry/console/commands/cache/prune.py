@@ -39,14 +39,16 @@ class CacheGcCommand(Command):
             self.line("No unpacked wheel store found.")
             return 0
 
-        tag = "comment" if self.option("dry-run") else "info"
+        dry_run = self.option("dry-run")
+        tag = "comment" if dry_run else "info"
         pruned = list(
-            store.prune_unreferenced(dry_run=self.option("dry-run"))
+            store.prune_unreferenced(dry_run=dry_run)
         )
 
         if pruned:
             for entry in pruned:
-                self.line(f"  <{tag}>Removed: {entry.name}</{tag}>")
+                action = "Would remove" if dry_run else "Removed"
+                self.line(f"  <{tag}>{action}: {entry.name}</{tag}>")
         else:
             self.line("No unreferenced entries found.")
 

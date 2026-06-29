@@ -198,6 +198,42 @@ def test_hardlink_store_shared(tmp_path: Path, demo_wheel: Path) -> None:
         assert f.stat().st_nlink > 1
 
 
+def test_hardlink_install_creates_extracted_marker(
+    tmp_path: Path, demo_wheel: Path
+) -> None:
+    env = MockEnv(path=tmp_path / "env")
+    installer = WheelInstaller(env, link_mode="hardlink")
+    content_hash = "sha256:test_marker_created"
+    installer.install(demo_wheel, content_hash=content_hash)
+    entry = _store_entry_for_hash(env, content_hash)
+    assert (entry / ".extracted").exists()
+
+
+def test_hardlink_incomplete_entry_recovered(
+    tmp_path: Path, demo_wheel: Path
+) -> None:
+    env = MockEnv(path=tmp_path / "env")
+    installer = WheelInstaller(env, link_mode="hardlink")
+    content_hash = "sha256:test_incomplete_recovery"
+
+    # Create a partial store entry with some files but no .extracted marker
+    # to simulate a crash during previous extraction
+    cache_base = tmp_path / "env" / ".." / ".." / "cache"
+    store = UnpackedWheelStore(cache_base)
+    store_path = store.get_store_path(content_hash)
+    store_path.mkdir(parents=True)
+    (store_path / "some_leftover.txt").write_text("leftover")
+
+    # Install should detect incomplete entry, remove it, and re-extract
+    installer.install(demo_wheel, content_hash=content_hash)
+
+    entry = _store_entry_for_hash(env, content_hash)
+    assert entry.exists()
+    assert (entry / ".extracted").exists()
+    assert not (entry / "some_leftover.txt").exists()
+    assert (entry / "demo" / "__init__.py").exists()
+
+
 def test_hardlink_no_store_without_hash(tmp_path: Path, demo_wheel: Path) -> None:
     env = MockEnv(path=tmp_path / "env")
     installer = WheelInstaller(env, link_mode="hardlink")

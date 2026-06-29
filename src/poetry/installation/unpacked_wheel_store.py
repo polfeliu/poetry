@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import hashlib
 import shutil
-import zipfile
 from pathlib import Path
 from typing import TYPE_CHECKING
+from typing import BinaryIO
 from typing import Iterator
+
+from installer.records import Hash
+from installer.records import RecordEntry
+from installer.utils import copyfileobj_with_hashing
+
+from poetry.utils.filesystem import link_or_copy
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -41,59 +48,62 @@ class UnpackedWheelStore:
         key = content_hash.replace(":", "-")
         return self.cache_dir / key
 
-    def extract_wheel(self, wheel_path: Path, content_hash: str) -> Path:
-        """
-        Extract a wheel file to the store.
+    def is_extracted(self, content_hash: str) -> bool:
+        return (self.get_store_path(content_hash) / ".extracted").exists()
 
-        Args:
-            wheel_path: Path to the wheel file
-            content_hash: Content hash from the lock file
+    def mark_extracted(self, content_hash: str) -> None:
+        self.get_store_path(content_hash).mkdir(parents=True, exist_ok=True)
+        (self.get_store_path(content_hash) / ".extracted").touch()
 
-        Returns:
-            Path to the extracted wheel directory
-        """
-        store_path = self.get_store_path(content_hash)
+    def write_file(
+        self,
+        store_key: str,
+        path: str,
+        stream: BinaryIO,
+        target_path: Path,
+        link_mode: str,
+        is_executable: bool,
+        hash_algorithm: str = "sha256",
+    ) -> RecordEntry:
+        store_file = self.get_store_path(store_key) / path
 
-        # Check if already extracted
-        if store_path.exists():
-            # Verify it's complete by checking for a marker file
-            marker_file = store_path / ".extracted"
-            if marker_file.exists():
-                return store_path
+        force_copy = (
+            path.endswith(".dist-info/RECORD")
+            or path.endswith(".dist-info/direct_url.json")
+            or path.endswith(".dist-info/.pth")
+        )
 
-            # Incomplete extraction, clean up
-            shutil.rmtree(store_path, ignore_errors=True)
+        if not store_file.exists():
+            store_file.parent.mkdir(parents=True, exist_ok=True)
+            with store_file.open("wb") as f:
+                hash_, size = copyfileobj_with_hashing(stream, f, hash_algorithm)
 
-        # Create store directory
-        store_path.mkdir(parents=True, exist_ok=True)
+            link_or_copy(
+                store_file,
+                target_path,
+                link_mode=link_mode,
+                is_executable=is_executable,
+                force_copy=force_copy,
+            )
 
-        try:
-            # Extract wheel contents
-            with zipfile.ZipFile(wheel_path, "r") as zf:
-                zf.extractall(store_path)
+            return RecordEntry(path, Hash(hash_algorithm, hash_), size)
 
-            # Create marker file to indicate successful extraction
-            (store_path / ".extracted").touch()
+        link_or_copy(
+            store_file,
+            target_path,
+            link_mode=link_mode,
+            is_executable=is_executable,
+            force_copy=force_copy,
+        )
 
-            return store_path
+        hash_ = hashlib.sha256()
+        with target_path.open("rb") as f:
+            while chunk := f.read(65536):
+                hash_.update(chunk)
+        hash_ = hash_.hexdigest()
+        size = target_path.stat().st_size
 
-        except Exception:
-            # Clean up on failure
-            shutil.rmtree(store_path, ignore_errors=True)
-            raise
-
-    def get_wheel_file_path(self, store_path: Path, wheel_name: str) -> Path:
-        """
-        Get the path to the wheel file within the store.
-
-        Args:
-            store_path: Path to the extracted wheel directory
-            wheel_name: Name of the wheel file
-
-        Returns:
-            Path to the wheel file
-        """
-        return store_path / wheel_name
+        return RecordEntry(path, Hash(hash_algorithm, hash_), size)
 
     def list_entries(self) -> Iterable[Path]:
         """

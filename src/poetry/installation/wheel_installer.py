@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import hashlib
 import logging
 import os
 import platform
+import shutil
 import sys
 
 from pathlib import Path
@@ -16,10 +16,6 @@ from installer.sources import _WheelFileValidationError
 
 from poetry.__version__ import __version__
 from poetry.utils._compat import WINDOWS
-from poetry.utils.filesystem import link_or_copy
-
-
-logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from collections.abc import Collection
@@ -29,7 +25,11 @@ if TYPE_CHECKING:
     from installer.scripts import LauncherKind
     from installer.utils import Scheme
 
+    from poetry.installation.unpacked_wheel_store import UnpackedWheelStore
     from poetry.utils.env import Env
+
+
+logger = logging.getLogger(__name__)
 
 
 class WheelDestination(SchemeDictionaryDestination):
@@ -42,7 +42,8 @@ class WheelDestination(SchemeDictionaryDestination):
         script_kind: LauncherKind,
         bytecode_optimization_levels: Collection[int],
         link_mode: str = "copy",
-        store_path: Path | None = None,
+        store: UnpackedWheelStore | None = None,
+        store_key: str | None = None,
     ) -> None:
         super().__init__(
             scheme_dict,
@@ -51,7 +52,8 @@ class WheelDestination(SchemeDictionaryDestination):
             bytecode_optimization_levels=bytecode_optimization_levels,
         )
         self._link_mode = link_mode
-        self._store_path = store_path
+        self._store = store
+        self._store_key = store_key
 
     def write_to_fs(
         self,
@@ -96,55 +98,16 @@ class WheelDestination(SchemeDictionaryDestination):
             # that two threads try to create the directory.
             parent_folder.mkdir(parents=True, exist_ok=True)
 
-        # Check if we should link from store
-        if self._store_path and self._link_mode != "copy":
-            store_file = self._store_path / path
-
-            force_copy = (
-                path.endswith(".dist-info/RECORD")
-                or path.endswith(".dist-info/direct_url.json")
-                or path.endswith(".dist-info/.pth")
-                or path == ""
-            )
-
-            if not store_file.exists():
-                # Populate store on first install
-                store_file.parent.mkdir(parents=True, exist_ok=True)
-                with store_file.open("wb") as f:
-                    hash_, size = copyfileobj_with_hashing(
-                        stream, f, self.hash_algorithm
-                    )
-
-                link_or_copy(
-                    store_file,
-                    target_path,
-                    link_mode=self._link_mode,
-                    is_executable=is_executable,
-                    force_copy=force_copy,
-                )
-
-                return RecordEntry(
-                    path, Hash(self.hash_algorithm, hash_), size
-                )
-
-            # Store file exists — link from store
-            link_or_copy(
-                store_file,
-                target_path,
+        if self._store is not None and self._link_mode != "copy":
+            return self._store.write_file(
+                store_key=self._store_key,
+                path=path,
+                stream=stream,
+                target_path=target_path,
                 link_mode=self._link_mode,
                 is_executable=is_executable,
-                force_copy=force_copy,
+                hash_algorithm=self.hash_algorithm,
             )
-
-            # Calculate hash and size for the record
-            hash_ = hashlib.sha256()
-            with target_path.open("rb") as f:
-                while chunk := f.read(65536):
-                    hash_.update(chunk)
-            hash_ = hash_.hexdigest()
-            size = target_path.stat().st_size
-
-            return RecordEntry(path, Hash(self.hash_algorithm, hash_), size)
 
         with target_path.open("wb") as f:
             hash_, size = copyfileobj_with_hashing(stream, f, self.hash_algorithm)
@@ -186,8 +149,7 @@ class WheelInstaller:
         # Import here to avoid circular imports
         from poetry.installation.unpacked_wheel_store import UnpackedWheelStore
 
-        # Compute store entry path (don't extract — done lazily per-file)
-        store_entry_path = None
+        store: UnpackedWheelStore | None = None
         if self._link_mode != "copy" and content_hash is not None:
             cache_base = (
                 self._store_base_path
@@ -195,7 +157,15 @@ class WheelInstaller:
                 else self._env.path / ".." / ".." / "cache"
             )
             store = UnpackedWheelStore(cache_base)
-            store_entry_path = store.get_store_path(content_hash)
+
+            # Crash recovery: if the store entry exists but is incomplete
+            # (e.g. previous extraction crashed mid-way), remove it so
+            # we start fresh. This also handles concurrent extractions:
+            # only one process wins, the other re-extracts.
+            if not store.is_extracted(content_hash):
+                store_path = store.get_store_path(content_hash)
+                if store_path.exists():
+                    shutil.rmtree(store_path, ignore_errors=True)
 
         with WheelFile.open(wheel) as source:
             try:
@@ -216,7 +186,8 @@ class WheelInstaller:
                 script_kind=self._script_kind,
                 bytecode_optimization_levels=self._bytecode_optimization_levels,
                 link_mode=self._link_mode,
-                store_path=store_entry_path,
+                store=store,
+                store_key=content_hash,
             )
 
             install(
@@ -227,3 +198,6 @@ class WheelInstaller:
                     "INSTALLER": f"Poetry {__version__}".encode(),
                 },
             )
+
+        if store is not None and content_hash is not None:
+            store.mark_extracted(content_hash)
