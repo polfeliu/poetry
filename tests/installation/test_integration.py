@@ -57,7 +57,8 @@ def test_hardlink_shared_store_two_venvs(tmp_path: Path, demo_wheel: Path) -> No
     installer_a.install(demo_wheel, content_hash=content_hash)
     installer_b.install(demo_wheel, content_hash=content_hash)
 
-    store = UnpackedWheelStore(tmp_path / "cache")
+    cache_base = venv_a.path / ".." / ".." / "cache"
+    store = UnpackedWheelStore(cache_base)
     entry = store.get_store_path(content_hash)
     assert entry.exists()
     hardlinked = [f for f in entry.rglob("*") if f.is_file() and f.suffix == ".py"]
@@ -83,7 +84,8 @@ def test_hardlink_content_hash_isolation(tmp_path: Path, demo_wheel: Path) -> No
     installer.install(demo_wheel, content_hash=hash_a)
     installer.install(demo_wheel, content_hash=hash_b)
 
-    store = UnpackedWheelStore(tmp_path / "cache")
+    cache_base = venv.path / ".." / ".." / "cache"
+    store = UnpackedWheelStore(cache_base)
     assert store.get_store_path(hash_a).exists()
     assert store.get_store_path(hash_b).exists()
     assert store.get_store_path(hash_a) != store.get_store_path(hash_b)
@@ -102,7 +104,8 @@ def test_prune_unreferenced_store_entry(tmp_path: Path, demo_wheel: Path) -> Non
     installer = WheelInstaller(venv, link_mode=LinkMode.HARDLINK)
     installer.install(demo_wheel, content_hash=content_hash)
 
-    store = UnpackedWheelStore(tmp_path / "cache")
+    cache_base = venv.path / ".." / ".." / "cache"
+    store = UnpackedWheelStore(cache_base)
     entry = store.get_store_path(content_hash)
     assert entry.exists()
 
@@ -124,7 +127,8 @@ def test_prune_referenced_entry_kept(tmp_path: Path, demo_wheel: Path) -> None:
     installer = WheelInstaller(venv, link_mode=LinkMode.HARDLINK)
     installer.install(demo_wheel, content_hash=content_hash)
 
-    store = UnpackedWheelStore(tmp_path / "cache")
+    cache_base = venv.path / ".." / ".." / "cache"
+    store = UnpackedWheelStore(cache_base)
     entry = store.get_store_path(content_hash)
     assert entry.exists()
 

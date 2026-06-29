@@ -108,6 +108,7 @@ class WheelDestination(SchemeDictionaryDestination):
             and self._link_mode is not LinkMode.COPY
             and not force_copy
         ):
+            assert self._store_key is not None
             return self._store.write_file(
                 store_key=self._store_key,
                 path=path,
