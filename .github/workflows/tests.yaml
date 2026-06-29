@@ -74,6 +74,12 @@ jobs:
 
       - run: pipx run build
 
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: distfiles
+          path: dist/
+          if-no-files-found: error
+
       - run: pipx run twine check --strict dist/*
 
       - run: pipx install --suffix=@build dist/*.whl
