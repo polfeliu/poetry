@@ -158,7 +158,7 @@ class WheelInstaller:
 
         store: UnpackedWheelStore | None = None
         if self._link_mode is not LinkMode.COPY and content_hash is not None:
-            cache_base = self._env.path / ".." / ".." / "cache"
+            cache_base = (self._env.path / ".." / ".." / "cache").resolve()
             store = UnpackedWheelStore(cache_base)
 
             # Remove incomplete entries (missing .extracted marker).

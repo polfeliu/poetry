@@ -33,10 +33,12 @@ def test_hardlink_install_into_real_venv(
     assert (purelib / "demo" / "__init__.py").exists()
     assert (purelib / "demo-0.1.0.dist-info" / "METADATA").exists()
 
-    store = UnpackedWheelStore(tmp_venv.path / ".." / ".." / "cache").get_store_path(
-        "sha256:test_real_venv"
+    store_path = (
+        UnpackedWheelStore(
+            (tmp_venv.path / ".." / ".." / "cache").resolve()
+        ).get_store_path("sha256:test_real_venv")
     )
-    assert store.exists()
+    assert store_path.exists()
 
 
 def test_hardlink_shared_store_two_venvs(tmp_path: Path, demo_wheel: Path) -> None:
@@ -57,7 +59,7 @@ def test_hardlink_shared_store_two_venvs(tmp_path: Path, demo_wheel: Path) -> No
     installer_a.install(demo_wheel, content_hash=content_hash)
     installer_b.install(demo_wheel, content_hash=content_hash)
 
-    cache_base = venv_a.path / ".." / ".." / "cache"
+    cache_base = (venv_a.path / ".." / ".." / "cache").resolve()
     store = UnpackedWheelStore(cache_base)
     entry = store.get_store_path(content_hash)
     assert entry.exists()
@@ -84,7 +86,7 @@ def test_hardlink_content_hash_isolation(tmp_path: Path, demo_wheel: Path) -> No
     installer.install(demo_wheel, content_hash=hash_a)
     installer.install(demo_wheel, content_hash=hash_b)
 
-    cache_base = venv.path / ".." / ".." / "cache"
+    cache_base = (venv.path / ".." / ".." / "cache").resolve()
     store = UnpackedWheelStore(cache_base)
     assert store.get_store_path(hash_a).exists()
     assert store.get_store_path(hash_b).exists()
@@ -104,7 +106,7 @@ def test_prune_unreferenced_store_entry(tmp_path: Path, demo_wheel: Path) -> Non
     installer = WheelInstaller(venv, link_mode=LinkMode.HARDLINK)
     installer.install(demo_wheel, content_hash=content_hash)
 
-    cache_base = venv.path / ".." / ".." / "cache"
+    cache_base = (venv.path / ".." / ".." / "cache").resolve()
     store = UnpackedWheelStore(cache_base)
     entry = store.get_store_path(content_hash)
     assert entry.exists()
@@ -127,7 +129,7 @@ def test_prune_referenced_entry_kept(tmp_path: Path, demo_wheel: Path) -> None:
     installer = WheelInstaller(venv, link_mode=LinkMode.HARDLINK)
     installer.install(demo_wheel, content_hash=content_hash)
 
-    cache_base = venv.path / ".." / ".." / "cache"
+    cache_base = (venv.path / ".." / ".." / "cache").resolve()
     store = UnpackedWheelStore(cache_base)
     entry = store.get_store_path(content_hash)
     assert entry.exists()
@@ -185,7 +187,7 @@ def test_hardlink_links_from_store_to_venv(
     init_py = purelib / "demo" / "__init__.py"
     assert init_py.exists()
 
-    cache_base = tmp_venv.path / ".." / ".." / "cache"
+    cache_base = (tmp_venv.path / ".." / ".." / "cache").resolve()
     store_init = (
         UnpackedWheelStore(cache_base).get_store_path(content_hash)
         / "demo"
