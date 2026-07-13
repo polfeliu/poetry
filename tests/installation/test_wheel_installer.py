@@ -171,6 +171,27 @@ def test_hardlink_installation_store_created(tmp_path: Path, demo_wheel: Path) -
     assert entry.exists()
 
 
+def test_hardlink_installation_uses_configured_cache_dir(
+    tmp_path: Path, demo_wheel: Path
+) -> None:
+    env = MockEnv(path=tmp_path / "env")
+    cache_dir = tmp_path / "poetry-cache"
+    installer = WheelInstaller(
+        env,
+        link_mode=LinkMode.HARDLINK,
+        cache_dir=cache_dir,
+    )
+    content_hash = "sha256:test_configured_cache_dir"
+
+    installer.install(demo_wheel, content_hash=content_hash)
+
+    entry = UnpackedWheelStore(cache_dir).get_store_path(content_hash)
+    assert entry.exists()
+    assert not UnpackedWheelStore(env.path / ".." / ".." / "cache").get_store_path(
+        content_hash
+    ).exists()
+
+
 def test_hardlink_store_shared(tmp_path: Path, demo_wheel: Path) -> None:
     env_a = MockEnv(path=tmp_path / "env_a")
     env_b = MockEnv(path=tmp_path / "env_b")
