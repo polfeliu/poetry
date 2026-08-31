@@ -26,6 +26,7 @@ from poetry.puzzle.exceptions import SolverProblemError
 from poetry.utils._compat import decode
 from poetry.utils.authenticator import Authenticator
 from poetry.utils.env import EnvCommandError
+from poetry.utils.filesystem import LinkMode
 from poetry.utils.helpers import Downloader
 from poetry.utils.helpers import get_file_hash
 from poetry.utils.helpers import get_highest_priority_hash_type
@@ -76,7 +77,12 @@ class Executor:
         self._dry_run = False
         self._enabled = True
         self._verbose = False
-        self._wheel_installer = WheelInstaller(self._env)
+        self._link_mode = LinkMode(config.get("installer.link-mode", "copy"))
+        self._wheel_installer = WheelInstaller(
+            self._env,
+            link_mode=self._link_mode,
+            cache_dir=Path(config.get("cache-dir")).expanduser(),
+        )
         self._build_constraints = build_constraints or {}
 
         if parallel is None:
@@ -611,7 +617,8 @@ class Executor:
                 assert isinstance(operation, Update)
                 self._remove(operation.initial_package)
 
-            self._wheel_installer.install(archive)
+            content_hash = self._hashes.get(package.name)
+            self._wheel_installer.install(archive, content_hash=content_hash)
         finally:
             if cleanup_archive:
                 archive.unlink()

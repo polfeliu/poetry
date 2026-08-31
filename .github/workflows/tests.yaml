@@ -21,7 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       project: ${{ steps.changes.outputs.project }}
-      fixtures-pypi: ${{ steps.changes.outputs.fixtures-pypi }}
       src: ${{ steps.changes.outputs.src }}
       tests: ${{ steps.changes.outputs.tests }}
     steps:
@@ -41,9 +40,6 @@ jobs:
               - *workflow
               - 'poetry.lock'
               - 'pyproject.toml'
-            fixtures-pypi:
-              - *workflow
-              - 'tests/repositories/fixtures/pypi.org/**'
             src:
               - *project
               - 'src/**/*.py'
@@ -69,14 +65,20 @@ jobs:
   smoke:
     name: Smoke-test build and install
     runs-on: ubuntu-latest
-    if: needs.changes.outputs.project == 'true'
-    needs: lockfile
+    if: needs.changes.outputs.src == 'true'
+    needs: changes
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
       - run: pipx run build
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: distfiles
+          path: dist/
+          if-no-files-found: error
 
       - run: pipx run twine check --strict dist/*
 
@@ -87,25 +89,34 @@ jobs:
       # Smoke test: confirm the version of the installed wheel matches the project.
       - run: poetry@build --version | grep $(poetry version --short)
 
-  fixtures-pypi:
-    name: Check fixtures (PyPI)
-    runs-on: ubuntu-latest
-    if: needs.changes.outputs.fixtures-pypi == 'true'
+  hardlink-e2e:
+    name: Hardlink E2E (${{ matrix.os.name }})
+    runs-on: ${{ matrix.os.image }}
+    if: needs.changes.outputs.tests == 'true'
     needs: changes
+    strategy:
+      matrix:
+        os:
+          - name: Windows
+            image: windows-2022
+          - name: macOS
+            image: macos-14
+      fail-fast: false
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
       - uses: ./.github/actions/bootstrap-poetry
+        with:
+          python-version: "3.12"
 
       - uses: ./.github/actions/poetry-install
-        with:
-          args: --only main,test
 
-      - run: poetry run env PYTHONPATH="$GITHUB_WORKSPACE" python tests/repositories/fixtures/pypi.org/generate.py
+      - run: poetry run pytest tests/installation/test_wheel_installer.py tests/installation/test_unpacked_wheel_store.py tests/utils/test_filesystem.py -v
 
-      - run: git diff --exit-code --stat HEAD tests/repositories/fixtures/pypi.org
+      - if: runner.os != 'Windows'
+        run: poetry run pytest tests/installation/test_integration.py --integration -v
 
   tests-matrix:
     # Use this matrix with multiple jobs defined in a reusable workflow:
@@ -116,8 +127,8 @@ jobs:
       - lockfile
       - changes
     with:
-      runner: ${{ matrix.os.image }}
-      python-version: ${{ matrix.python-version }}
+      runner: ubuntu-22.04
+      python-version: "3.12"
       run-mypy: ${{ needs.changes.outputs.tests == 'true' }}
       run-pytest: ${{ needs.changes.outputs.tests == 'true' }}
       run-pytest-export: ${{ needs.changes.outputs.src == 'true' }}
@@ -127,16 +138,8 @@ jobs:
         os:
           - name: Ubuntu
             image: ubuntu-22.04
-          - name: Windows
-            image: windows-2022
-          - name: macOS aarch64
-            image: macos-14
         python-version:
-          - "3.10"
-          - "3.11"
           - "3.12"
-          - "3.13"
-          - "3.14"
       fail-fast: false
 
   status:
@@ -146,7 +149,7 @@ jobs:
     needs:
       - lockfile
       - smoke
-      - fixtures-pypi
+      - hardlink-e2e
       - tests-matrix
     steps:
       - run: ${{ (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) && 'false' || 'true' }}

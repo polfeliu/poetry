@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import platform
+import shutil
 import sys
 
 from pathlib import Path
@@ -15,9 +16,8 @@ from installer.sources import _WheelFileValidationError
 
 from poetry.__version__ import __version__
 from poetry.utils._compat import WINDOWS
+from poetry.utils.filesystem import LinkMode
 
-
-logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from collections.abc import Collection
@@ -27,11 +27,33 @@ if TYPE_CHECKING:
     from installer.scripts import LauncherKind
     from installer.utils import Scheme
 
+    from poetry.installation.unpacked_wheel_store import UnpackedWheelStore
     from poetry.utils.env import Env
 
 
+logger = logging.getLogger(__name__)
+
+
 class WheelDestination(SchemeDictionaryDestination):
-    """ """
+    def __init__(
+        self,
+        scheme_dict: dict[str, str],
+        interpreter: str,
+        script_kind: LauncherKind,
+        bytecode_optimization_levels: Collection[int],
+        link_mode: LinkMode = LinkMode.COPY,
+        store: UnpackedWheelStore | None = None,
+        store_key: str | None = None,
+    ) -> None:
+        super().__init__(
+            scheme_dict,
+            interpreter=interpreter,
+            script_kind=script_kind,
+            bytecode_optimization_levels=bytecode_optimization_levels,
+        )
+        self._link_mode = link_mode
+        self._store = store
+        self._store_key = store_key
 
     def write_to_fs(
         self,
@@ -76,6 +98,27 @@ class WheelDestination(SchemeDictionaryDestination):
             # that two threads try to create the directory.
             parent_folder.mkdir(parents=True, exist_ok=True)
 
+        # RECORD, direct_url.json, .pth, and scripts must be unique per venv — write directly.
+        force_copy = path.endswith(
+            (".dist-info/RECORD", ".dist-info/direct_url.json", ".dist-info/.pth")
+        ) or scheme == "scripts"
+
+        if (
+            self._store is not None
+            and self._link_mode is not LinkMode.COPY
+            and not force_copy
+        ):
+            assert self._store_key is not None
+            return self._store.write_file(
+                store_key=self._store_key,
+                path=path,
+                stream=stream,
+                target_path=target_path,
+                link_mode=self._link_mode,
+                is_executable=is_executable,
+                hash_algorithm=self.hash_algorithm,
+            )
+
         with target_path.open("wb") as f:
             hash_, size = copyfileobj_with_hashing(stream, f, self.hash_algorithm)
 
@@ -86,8 +129,15 @@ class WheelDestination(SchemeDictionaryDestination):
 
 
 class WheelInstaller:
-    def __init__(self, env: Env) -> None:
+    def __init__(
+        self,
+        env: Env,
+        link_mode: LinkMode = LinkMode.COPY,
+        cache_dir: Path | None = None,
+    ) -> None:
         self._env = env
+        self._link_mode = link_mode
+        self._cache_dir = cache_dir
 
         script_kind: LauncherKind
         if not WINDOWS:
@@ -105,7 +155,21 @@ class WheelInstaller:
     def enable_bytecode_compilation(self, enable: bool = True) -> None:
         self._bytecode_optimization_levels = (-1,) if enable else ()
 
-    def install(self, wheel: Path) -> None:
+    def install(self, wheel: Path, content_hash: str | None = None) -> None:
+        from poetry.installation.unpacked_wheel_store import UnpackedWheelStore
+
+        store: UnpackedWheelStore | None = None
+        if self._link_mode is not LinkMode.COPY and content_hash is not None:
+            cache_base = self._cache_dir or (self._env.path / ".." / ".." / "cache").resolve()
+            store = UnpackedWheelStore(cache_base)
+
+            # Remove incomplete entries (missing .extracted marker).
+            # Handles crash and concurrent-extraction recovery.
+            if not store.is_extracted(content_hash):
+                store_path = store.get_store_path(content_hash)
+                if store_path.exists():
+                    shutil.rmtree(store_path, ignore_errors=True)
+
         with WheelFile.open(wheel) as source:
             try:
                 # Content validation is temporarily disabled because of
@@ -124,6 +188,9 @@ class WheelInstaller:
                 interpreter=str(self._env.python),
                 script_kind=self._script_kind,
                 bytecode_optimization_levels=self._bytecode_optimization_levels,
+                link_mode=self._link_mode,
+                store=store,
+                store_key=content_hash,
             )
 
             install(
@@ -134,3 +201,6 @@ class WheelInstaller:
                     "INSTALLER": f"Poetry {__version__}".encode(),
                 },
             )
+
+        if store is not None and content_hash is not None:
+            store.mark_extracted(content_hash)

@@ -9,9 +9,11 @@ import pytest
 
 from poetry.core.constraints.version import parse_constraint
 
+from poetry.installation.unpacked_wheel_store import UnpackedWheelStore
 from poetry.installation.wheel_installer import WheelInstaller
 from poetry.utils._compat import WINDOWS
 from poetry.utils.env import MockEnv
+from poetry.utils.filesystem import LinkMode
 
 
 if TYPE_CHECKING:
@@ -115,6 +117,170 @@ def test_no_path_traversal(
         assert target.read_text(encoding="utf-8") == "original"
     else:
         assert not target.exists()
+
+
+@pytest.fixture(scope="module")
+def hardlink_installation(tmp_path_factory: TempPathFactory, demo_wheel: Path) -> Path:
+    env = MockEnv(path=tmp_path_factory.mktemp("hardlink_install"))
+    installer = WheelInstaller(env, link_mode=LinkMode.HARDLINK)
+    installer.install(demo_wheel, content_hash="sha256:test_demo_wheel")
+    return Path(env.paths["purelib"])
+
+
+def test_hardlink_installation_source_dir_content(
+    hardlink_installation: Path,
+) -> None:
+    source_dir = hardlink_installation / "demo"
+    assert source_dir.exists()
+    assert (source_dir / "__init__.py").exists()
+
+
+def test_hardlink_installation_dist_info_dir_content(
+    hardlink_installation: Path,
+) -> None:
+    dist_info_dir = hardlink_installation / "demo-0.1.0.dist-info"
+    assert dist_info_dir.exists()
+    assert (dist_info_dir / "INSTALLER").exists()
+    assert (dist_info_dir / "METADATA").exists()
+    assert (dist_info_dir / "RECORD").exists()
+    assert (dist_info_dir / "WHEEL").exists()
+
+
+def test_hardlink_installer_file_contains_valid_version(
+    hardlink_installation: Path,
+) -> None:
+    installer_file = hardlink_installation / "demo-0.1.0.dist-info" / "INSTALLER"
+    with open(installer_file, encoding="utf-8") as f:
+        installer_content = f.read()
+    match = re.match(r"Poetry (?P<version>.*)", installer_content)
+    assert match
+    parse_constraint(match.group("version"))
+
+
+def _store_entry_for_hash(env: MockEnv, content_hash: str) -> Path:
+    cache_base = env.path / ".." / ".." / "cache"
+    return UnpackedWheelStore(cache_base).get_store_path(content_hash)
+
+
+def test_hardlink_installation_store_created(tmp_path: Path, demo_wheel: Path) -> None:
+    env = MockEnv(path=tmp_path / "env")
+    installer = WheelInstaller(env, link_mode=LinkMode.HARDLINK)
+    content_hash = "sha256:test_store_created"
+    installer.install(demo_wheel, content_hash=content_hash)
+    entry = _store_entry_for_hash(env, content_hash)
+    assert entry.exists()
+
+
+def test_hardlink_installation_uses_configured_cache_dir(
+    tmp_path: Path, demo_wheel: Path
+) -> None:
+    env = MockEnv(path=tmp_path / "env")
+    cache_dir = tmp_path / "poetry-cache"
+    installer = WheelInstaller(
+        env,
+        link_mode=LinkMode.HARDLINK,
+        cache_dir=cache_dir,
+    )
+    content_hash = "sha256:test_configured_cache_dir"
+
+    installer.install(demo_wheel, content_hash=content_hash)
+
+    entry = UnpackedWheelStore(cache_dir).get_store_path(content_hash)
+    assert entry.exists()
+    assert not UnpackedWheelStore(env.path / ".." / ".." / "cache").get_store_path(
+        content_hash
+    ).exists()
+
+
+def test_hardlink_store_shared(tmp_path: Path, demo_wheel: Path) -> None:
+    env_a = MockEnv(path=tmp_path / "env_a")
+    env_b = MockEnv(path=tmp_path / "env_b")
+    installer_a = WheelInstaller(env_a, link_mode=LinkMode.HARDLINK)
+    installer_b = WheelInstaller(env_b, link_mode=LinkMode.HARDLINK)
+    content_hash = "sha256:test_shared_store"
+
+    installer_a.install(demo_wheel, content_hash=content_hash)
+    installer_b.install(demo_wheel, content_hash=content_hash)
+
+    entry = _store_entry_for_hash(env_a, content_hash)
+    assert entry.exists()
+    hardlinkable = [
+        f
+        for f in entry.rglob("*")
+        if f.is_file() and f.name not in (".extracted",) and f.suffix in (".py", ".pth")
+    ]
+    assert len(hardlinkable) > 0, "No hardlinkable files in store"
+    for f in hardlinkable:
+        assert f.stat().st_nlink > 1
+
+
+def test_hardlink_install_creates_extracted_marker(
+    tmp_path: Path, demo_wheel: Path
+) -> None:
+    env = MockEnv(path=tmp_path / "env")
+    installer = WheelInstaller(env, link_mode=LinkMode.HARDLINK)
+    content_hash = "sha256:test_marker_created"
+    installer.install(demo_wheel, content_hash=content_hash)
+    entry = _store_entry_for_hash(env, content_hash)
+    assert (entry / ".extracted").exists()
+
+
+def test_hardlink_incomplete_entry_recovered(tmp_path: Path, demo_wheel: Path) -> None:
+    env = MockEnv(path=tmp_path / "env")
+    installer = WheelInstaller(env, link_mode=LinkMode.HARDLINK)
+    content_hash = "sha256:test_incomplete_recovery"
+
+    # Create a partial store entry with some files but no .extracted marker
+    # to simulate a crash during previous extraction
+    cache_base = tmp_path / "env" / ".." / ".." / "cache"
+    store = UnpackedWheelStore(cache_base)
+    store_path = store.get_store_path(content_hash)
+    store_path.mkdir(parents=True)
+    (store_path / "some_leftover.txt").write_text("leftover")
+
+    # Install should detect incomplete entry, remove it, and re-extract
+    installer.install(demo_wheel, content_hash=content_hash)
+
+    entry = _store_entry_for_hash(env, content_hash)
+    assert entry.exists()
+    assert (entry / ".extracted").exists()
+    assert not (entry / "some_leftover.txt").exists()
+    assert (entry / "demo" / "__init__.py").exists()
+
+
+def test_hardlink_no_store_without_hash(tmp_path: Path, demo_wheel: Path) -> None:
+    env = MockEnv(path=tmp_path / "env")
+    installer = WheelInstaller(env, link_mode=LinkMode.HARDLINK)
+    installer.install(demo_wheel)
+
+    purelib = Path(env.paths["purelib"])
+    assert (purelib / "demo" / "__init__.py").exists()
+
+
+def test_copy_mode_no_store(tmp_path: Path, demo_wheel: Path) -> None:
+    env = MockEnv(path=tmp_path / "env")
+    installer = WheelInstaller(env, link_mode=LinkMode.COPY)
+    installer.install(demo_wheel, content_hash="sha256:test_copy_no_store")
+
+    purelib = Path(env.paths["purelib"])
+    assert (purelib / "demo" / "__init__.py").exists()
+
+
+def test_default_installation_uses_copy(env: MockEnv, demo_wheel: Path) -> None:
+    installer = WheelInstaller(env)
+    installer.install(demo_wheel)
+    source_dir = Path(env.paths["purelib"]) / "demo"
+    assert source_dir.exists()
+
+
+def test_enable_bytecode_compilation_hardlink(tmp_path: Path, demo_wheel: Path) -> None:
+    env = MockEnv(path=tmp_path / "env")
+    installer = WheelInstaller(env, link_mode=LinkMode.HARDLINK)
+    installer.enable_bytecode_compilation(True)
+    installer.install(demo_wheel, content_hash="sha256:test_bytecode")
+    cache_dir = Path(env.paths["purelib"]) / "demo" / "__pycache__"
+    assert cache_dir.exists()
+    assert list(cache_dir.glob("*.pyc"))
 
 
 @pytest.mark.parametrize("existing", [False, True])
