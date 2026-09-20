@@ -92,7 +92,7 @@ class EnvManager:
 
     ENVS_FILE = "envs.toml"
 
-    def __init__(self, poetry: Poetry, io: None | IO = None) -> None:
+    def __init__(self, poetry: Poetry, io: IO | None = None) -> None:
         self._poetry = poetry
         self._io = io or NullIO()
 
@@ -195,7 +195,7 @@ class EnvManager:
 
     def get(self, reload: bool = False) -> Env:
         if self._env is not None and not reload:
-            return self._env
+            return self._mark_venv_used(self._env)
 
         python_minor: str | None = None
 
@@ -223,7 +223,7 @@ class EnvManager:
             if self.in_project_venv_exists():
                 venv = self.in_project_venv
 
-                return VirtualEnv(venv)
+                return self._mark_venv_used(VirtualEnv(venv))
 
             create_venv = self._poetry.config.get("virtualenvs.create", True)
 
@@ -249,10 +249,19 @@ class EnvManager:
                     self.envs_file.write(envs)
                 return self.get_system_env()
 
-            return VirtualEnv(venv)
+            return self._mark_venv_used(VirtualEnv(venv))
 
         assert env_prefix
-        return VirtualEnv(Path(env_prefix))
+        return self._mark_venv_used(VirtualEnv(Path(env_prefix)))
+
+    def _mark_venv_used(self, env: Env) -> Env:
+        """Record usage only for a selected global virtual environment."""
+        if (
+            isinstance(env, VirtualEnv)
+            and env.path.parent == self._poetry.config.virtualenvs_path
+        ):
+            env.touch_usage()
+        return env
 
     def list(self, name: str | None = None) -> list[VirtualEnv]:
         if name is None:
@@ -370,7 +379,7 @@ class EnvManager:
         force: bool = False,
     ) -> Env:
         if self._env is not None and not force:
-            return self._env
+            return self._mark_venv_used(self._env)
 
         cwd = self._poetry.file.path.parent
         env = self.get(reload=True)
@@ -387,7 +396,7 @@ class EnvManager:
                 raise InvalidCurrentPythonVersionError(
                     self._poetry.package.python_versions, str(current_python)
                 )
-            return env
+            return self._mark_venv_used(env)
 
         create_venv = self._poetry.config.get("virtualenvs.create")
         in_project_venv = self.use_in_project_venv()
@@ -513,7 +522,7 @@ class EnvManager:
             # Running properly in the virtualenv, don't need to do anything
             return self.get_system_env()
 
-        return VirtualEnv(venv)
+        return self._mark_venv_used(VirtualEnv(venv))
 
     @classmethod
     def build_venv(
