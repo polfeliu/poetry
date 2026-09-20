@@ -133,9 +133,11 @@ class WheelInstaller:
         self,
         env: Env,
         link_mode: LinkMode = LinkMode.COPY,
+        cache_dir: Path | None = None,
     ) -> None:
         self._env = env
         self._link_mode = link_mode
+        self._cache_dir = cache_dir
 
         script_kind: LauncherKind
         if not WINDOWS:
@@ -158,7 +160,7 @@ class WheelInstaller:
 
         store: UnpackedWheelStore | None = None
         if self._link_mode is not LinkMode.COPY and content_hash is not None:
-            cache_base = (self._env.path / ".." / ".." / "cache").resolve()
+            cache_base = self._cache_dir or (self._env.path / ".." / ".." / "cache").resolve()
             store = UnpackedWheelStore(cache_base)
 
             # Remove incomplete entries (missing .extracted marker).
