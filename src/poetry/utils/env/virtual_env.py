@@ -151,7 +151,6 @@ class VirtualEnv(Env):
         return environ
 
     def execute(self, bin: str, *args: str, **kwargs: Any) -> int:
-        self.touch_usage()
         kwargs["env"] = self.get_temp_environ(environ=kwargs.get("env"))
         return super().execute(bin, *args, **kwargs)
 

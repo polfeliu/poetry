@@ -254,10 +254,12 @@ class EnvManager:
         assert env_prefix
         return self._mark_venv_used(VirtualEnv(Path(env_prefix)))
 
-    @staticmethod
-    def _mark_venv_used(env: Env) -> Env:
-        """Record usage only for a selected virtual environment."""
-        if isinstance(env, VirtualEnv):
+    def _mark_venv_used(self, env: Env) -> Env:
+        """Record usage only for a selected global virtual environment."""
+        if (
+            isinstance(env, VirtualEnv)
+            and env.path.parent == self._poetry.config.virtualenvs_path
+        ):
             env.touch_usage()
         return env
 

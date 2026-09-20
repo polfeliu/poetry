@@ -597,6 +597,7 @@ def test_get_venv_with_venv_folder_present(
         assert venv.path != in_project_venv_dir
     else:
         assert venv.path == in_project_venv_dir
+        assert not (venv.path / ".poetry-last-used").exists()
 
 
 def test_get_prefers_explicitly_activated_virtualenvs_over_env_var(
