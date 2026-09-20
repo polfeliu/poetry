@@ -6,6 +6,7 @@ import re
 import sysconfig
 
 from contextlib import contextmanager
+from contextlib import suppress
 from copy import deepcopy
 from functools import cached_property
 from pathlib import Path
@@ -31,6 +32,8 @@ class VirtualEnv(Env):
     """
     A virtual Python environment.
     """
+
+    _USAGE_MARKER = ".poetry-last-used"
 
     def __init__(self, path: Path, base: Path | None = None) -> None:
         super().__init__(path, base)
@@ -114,6 +117,12 @@ class VirtualEnv(Env):
         # A virtualenv is considered sane if "python" exists.
         return os.path.exists(self.python)
 
+    def touch_usage(self) -> None:
+        """Record that Poetry selected this environment without affecting its command."""
+        # A read-only environment must not make a normal Poetry command fail.
+        with suppress(OSError):
+            (self._path / self._USAGE_MARKER).touch(exist_ok=True)
+
     def _run(self, cmd: list[str], **kwargs: Any) -> str:
         kwargs["env"] = self.get_temp_environ(environ=kwargs.get("env"))
         return super()._run(cmd, **kwargs)
@@ -142,6 +151,7 @@ class VirtualEnv(Env):
         return environ
 
     def execute(self, bin: str, *args: str, **kwargs: Any) -> int:
+        self.touch_usage()
         kwargs["env"] = self.get_temp_environ(environ=kwargs.get("env"))
         return super().execute(bin, *args, **kwargs)
 

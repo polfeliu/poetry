@@ -93,6 +93,16 @@ def test_env_commands_with_spaces_in_their_arg_work_as_expected(
     assert re.match(r"pip \S+ from", output)
 
 
+def test_virtualenv_usage_marker_is_created(tmp_venv: VirtualEnv) -> None:
+    marker = tmp_venv.path / ".poetry-last-used"
+
+    assert not marker.exists()
+
+    tmp_venv.touch_usage()
+
+    assert marker.is_file()
+
+
 @pytest.mark.parametrize("differing_platform", [True, False])
 def test_env_get_supported_tags_matches_inside_virtualenv(
     tmp_path: Path, manager: EnvManager, mocker: MockerFixture, differing_platform: bool

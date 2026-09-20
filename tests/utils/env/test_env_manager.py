@@ -626,6 +626,7 @@ def test_get_prefers_explicitly_activated_virtualenvs_over_env_var(
 
     assert env.path == tmp_path / f"{venv_name}-py3.7"
     assert env.base == Path(sys.base_prefix)
+    assert (env.path / ".poetry-last-used").is_file()
 
 
 @pytest.mark.parametrize("env_var", ["VIRTUAL_ENV", "CONDA_PREFIX"])
